@@ -1,0 +1,13 @@
+{
+  "name": "nacht-2d-zombies",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Top-down browser zombie survival prototype with WebSocket rooms",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
