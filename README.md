@@ -18,7 +18,7 @@ Browser-based top-down zombie survival prototype.
 4. Up to four players can join a room.
 5. Click **LEAVE ROOM** to disconnect.
 
-The room server assigns unique player IDs, rejects unknown room codes, prevents duplicate joins on one connection, and transfers host status when the host disconnects. The host relays the shared zombie/world state; guest shots are sent to the host for simulation.
+The room server assigns unique player IDs, rejects unknown room codes, prevents duplicate joins on one connection, and transfers host status when the host disconnects. The host relays the shared zombie/world state; guest shots are sent to the host for simulation. Each player keeps their own ammo, kills, and points. Door unlocks are shared across the room. Remote player positions are smoothed between network updates, and closed doors block movement until purchased.
 
 This is still an early multiplayer prototype, not a production-grade authoritative game server. Player health, all weapon actions, purchases, reconnect recovery, and anti-cheat are not fully server-authoritative yet.
 

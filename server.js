@@ -55,7 +55,7 @@ function joinRoom(ws, code, create) {
   else if (!/^[A-Z0-9]{6}$/.test(code || '')) return send(ws, {type:'error', message:'Enter a valid 6-character room code.'});
   let room = rooms.get(code);
   if (!room && !create) return send(ws, {type:'error', message:'Room not found. Ask the host to create it first.'});
-  if (!room) { room = { players:new Map(), hostId:null, world:null }; rooms.set(code, room); }
+  if (!room) { room = { players:new Map(), hostId:null, world:null, doorsOpen:[false,false] }; rooms.set(code, room); }
   if (room.players.size >= MAX_PLAYERS) return send(ws, {type:'error', message:'This room is full (4 players maximum).'});
   const id = 'p' + Math.random().toString(36).slice(2, 10);
   const isHost = room.players.size === 0;
@@ -64,7 +64,8 @@ function joinRoom(ws, code, create) {
   const spawnPoints = [{x:470,y:390},{x:510,y:390},{x:470,y:430},{x:510,y:430}];
   room.players.set(id, { ws, player:{...spawnPoints[spawnIndex], hp:100, angle:0} });
   ws.roomCode = code; ws.playerId = id;
-  send(ws, {type:'welcome', room:code, id, host:isHost, hostId:room.hostId, players:playersOf(room), world:room.world});
+  if (room.world) room.world.doors = room.world.doors || room.doorsOpen.map((open,i)=>({open}));
+  send(ws, {type:'welcome', room:code, id, host:isHost, hostId:room.hostId, players:playersOf(room), world:room.world, doorsOpen:room.doorsOpen});
   broadcast(room, {type:'players', players:playersOf(room), hostId:room.hostId}, ws);
 }
 wss.on('connection', ws => {
@@ -80,16 +81,32 @@ wss.on('connection', ws => {
     if (m.type === 'action' && m.action === 'shoot') {
       const shooter = own.player;
       const hostPeer = room.players.get(room.hostId);
-      if (hostPeer && hostPeer.ws !== ws) send(hostPeer.ws, {type:'playerAction', action:'shoot', player:{x:shooter.x,y:shooter.y,angle:shooter.angle}, damage:Math.max(1,Math.min(250,Number(m.damage)||35))});
+      if (hostPeer && hostPeer.ws !== ws) send(hostPeer.ws, {type:'playerAction', action:'shoot', playerId:ws.playerId, player:{x:shooter.x,y:shooter.y,angle:shooter.angle}, damage:Math.max(1,Math.min(250,Number(m.damage)||35))});
+      return;
+    }
+    if (m.type === 'door' && Number.isInteger(m.index) && m.index >= 0 && m.index < 2) {
+      if (!room.doorsOpen[m.index]) {
+        room.doorsOpen[m.index] = true;
+        if (room.world && Array.isArray(room.world.doors) && room.world.doors[m.index]) room.world.doors[m.index].open = true;
+        broadcast(room, { type:'doorOpen', index:m.index });
+      }
+      return;
+    }
+    if (m.type === 'award' && typeof m.target === 'string') {
+      const recipient = room.players.get(m.target);
+      if (recipient) send(recipient.ws, { type:'award', kills:Math.max(0,Math.min(10,Number(m.kills)||0)), points:Math.max(0,Math.min(1000,Number(m.points)||0)) });
       return;
     }
     if (m.type === 'state') {
       if (m.player && Number.isFinite(m.player.x) && Number.isFinite(m.player.y)) {
         own.player = { x:Math.max(16,Math.min(944,m.player.x)), y:Math.max(16,Math.min(584,m.player.y)), hp:Math.max(0,Math.min(100,Number(m.player.hp)||0)), angle:Number(m.player.angle)||0 };
       }
-      if (ws.playerId === room.hostId && m.world && typeof m.world === 'object') room.world = m.world;
+      if (ws.playerId === room.hostId && m.world && typeof m.world === 'object') {
+        room.world = m.world;
+        if (Array.isArray(room.world.doors)) room.world.doors.forEach((d,i)=>{ if (room.doorsOpen[i]) d.open = true; });
+      }
       const payload = {type:'state', players:playersOf(room), hostId:room.hostId};
-      if (ws.playerId === room.hostId && m.world) payload.world = m.world;
+      if (ws.playerId === room.hostId && m.world) payload.world = room.world;
       broadcast(room, payload, ws);
       return;
     }
